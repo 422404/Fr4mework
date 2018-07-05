@@ -1,0 +1,29 @@
+{
+  "name": "fr4mework-util",
+  "version": "1.0.2",
+  "description": "Utilities for the Fr4mework",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "ts-mocha -p test/tsconfig.json test/test.ts"
+  },
+  "keywords": [
+    "fr4mework",
+    "javascript",
+    "util"
+  ],
+  "author": "422404",
+  "license": "UNLICENCED",
+  "devDependencies": {
+    "@types/chai": "^4.1.4",
+    "@types/mocha": "^5.2.3",
+    "@types/node": "^10.3.6",
+    "@types/rewire": "^2.5.28",
+    "chai": "^4.1.2",
+    "mocha": "^5.2.0",
+    "rewire": "^4.0.1",
+    "ts-mocha": "^1.2.0",
+    "typescript": "^2.9.2"
+  }
+}

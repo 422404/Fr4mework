@@ -1,0 +1,22 @@
+{
+    "compilerOptions": {
+        "target": "es5",
+        "module": "commonjs",
+        "moduleResolution": "node",
+        "baseUrl": "packages",
+        "lib": [
+            "es2016",
+            "dom"
+        ],
+        "declaration": true,
+        "noImplicitReturns": true,
+        "experimentalDecorators": true,
+        "preserveConstEnums": true,
+        "removeComments": true,
+        "allowSyntheticDefaultImports": true
+    },
+    "exclude": [
+        "node_modules",
+        "dist"
+    ]
+}

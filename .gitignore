@@ -1,0 +1,5 @@
+# do not include node modules
+packages/**/node_modules
+
+# no Visual Studio Code files please
+.vscode
