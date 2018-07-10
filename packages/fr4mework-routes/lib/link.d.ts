@@ -1,3 +1,3 @@
-import { VNode } from 'fr4mework';
-declare let Link: ({ attributes, globalStore, children }: any) => VNode;
+import { AbstractBaseVNode } from 'fr4mework';
+declare let Link: ({ attributes, children }: any) => AbstractBaseVNode;
 export default Link;

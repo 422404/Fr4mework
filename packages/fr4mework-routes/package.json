@@ -17,6 +17,10 @@
   ],
   "author": "422404",
   "license": "UNLICENCED",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/422404/Fr4mework"
+  },
   "dependencies": {
     "fr4mework": "file:../fr4mework",
     "fr4mework-util": "file:../fr4mework-util"

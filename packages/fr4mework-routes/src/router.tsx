@@ -1,40 +1,32 @@
-import { globalStoreProperlyInitialized } from './util'
-import { scheduleRender, v, VNode } from 'fr4mework'
-import { chain } from 'fr4mework-util'
+import { scheduleRender, v, AbstractBaseVNode, Context } from 'fr4mework'
+import { inBrowser, chain } from 'fr4mework-util'
 
 let once = false;
+let LocationContext = Context.createContextProvider('LocationContext') as any;
 
-let Router = ({ children, globalStore }: any) => {
-    if (!globalStoreProperlyInitialized(globalStore)) {
-        initglobalStore(globalStore);
+let Router = ({ children, attributes }: any) => {
+    if (!once && inBrowser()) {
+        installHandlers();
     }
 
-    if (!once) {
-        installHandlers(globalStore);
-    }
-
-    return <div data-router="">{children}</div>;
+    return (
+        <div data-router="">
+            <LocationContext location={attributes.location || location.pathname}>
+                {children}
+            </LocationContext>
+        </div>
+    );
 };
 export default Router
 
-let initglobalStore = (globalStore) => {
-    globalStore.__fr4mework = globalStore.__fr4mework || {};
-    globalStore.__fr4mework.location = document.location.pathname;
-};
-
-let installHandlers = (globalStore) => {
-    window.onpopstate = historyStateChangeHandler.bind(null, globalStore);
+let installHandlers = () => {
+    window.onpopstate = scheduleRender;
     history.pushState = chain(
         { fn: history.pushState, scope: history, args: 'arguments' },
-        { fn: historyStateChangeHandler, scope: null, args: [globalStore] }
+        { fn: scheduleRender, scope: null, args: null }
     );
     history.replaceState = chain(
         { fn: history.replaceState, scope: history, args: 'arguments' },
-        { fn: historyStateChangeHandler, scope: null, args: [globalStore] }
+        { fn: scheduleRender, scope: null, args: null }
     );
-};
-
-let historyStateChangeHandler = (globalStore) => {
-    globalStore.__fr4mework.location = document.location.pathname;
-    scheduleRender();
 };

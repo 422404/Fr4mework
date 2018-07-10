@@ -1,23 +1,17 @@
-import { globalStoreProperlyInitialized, errorNoRouter } from './util'
-import { VNode, v } from 'fr4mework'
+import { AbstractBaseVNode, v } from 'fr4mework'
 
-let Link = ({ attributes, globalStore, children }: any) => (
-    <a {...attributes} data-link="" onclick={(e) => handleLinkClick(attributes.href, globalStore, e)}>
+let Link = ({ attributes, children }: any) => (
+    <a {...attributes} data-link="" onclick={(e) => handleLinkClick(attributes.href, e)}>
         {children}
     </a>
 );
 export default Link
 
-let handleLinkClick = (newLocation, globalStore, clickEvent) => {
+let handleLinkClick = (newLocation, clickEvent) => {
     clickEvent.preventDefault();
-    changeState(newLocation, globalStore);
+    changeState(newLocation);
 };
 
-let changeState = (newLocation, globalStore) => {
-    if (globalStoreProperlyInitialized(globalStore)) {
-        globalStore.__fr4mework.location = newLocation;
-        history.pushState(null, null, newLocation);
-    } else {
-        errorNoRouter();
-    }
+let changeState = (newLocation) => {
+    history.pushState(null, null, newLocation);
 };

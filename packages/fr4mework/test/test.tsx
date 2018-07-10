@@ -9,31 +9,39 @@ let should = registerShould();
 
 // we use rewire for private functions testing
 import rewire = require('rewire'); // do not use default import syntax, ts didn't liked it
+import { HTMLElementVNode } from '../lib/app';
 
 // DOM to simulate browser env
 let globallyfyJsdom = require('jsdom-global');
 
 // import the things to be tested
-let Fr4mework = rewire('../lib/app.js');
-let constructVNode = Fr4mework.__get__('constructVNode');
-let { serverSideRender, v } = Fr4mework;
-let createElement = Fr4mework.__get__('createElement');
-let updateElement = Fr4mework.__get__('updateElement');
-let vdomFromServerSideRenderedElements = Fr4mework.__get__('vdomFromServerSideRenderedElements');
+let Fr4mework_app = rewire('../lib/app.js');
+let Fr4mework_context = rewire('../lib/context.js');
+let { serverSideRender, v } = Fr4mework_app;
+let { Context } = Fr4mework_context;
+let constructVNode = Fr4mework_app.__get__('constructVNode');
+let createElement = Fr4mework_app.__get__('createElement');
+let updateElement = Fr4mework_app.__get__('updateElement');
+let vdomFromServerSideRenderedElements = Fr4mework_app.__get__('vdomFromServerSideRenderedElements');
 
 describe('v()', function () {
     let wantedTree = { 
-        type: 'a',
+        type: 'html',
+        tag: 'a',
         attributes: null,
         children: [
             {
-                type: 'div',
+                type: 'html',
+                tag: 'div',
                 attributes: {
                     class: 'hello',
                     id: 'id'
                 },
                 children: [
-                    'Helloworld !'
+                    {
+                        type: 'text',
+                        value: 'Helloworld !'
+                    }
                 ]
             }
         ]
@@ -54,13 +62,13 @@ describe('v()', function () {
 
 describe('constructVNode()', function () {
     let App = () => <p>Hello</p>;
-    let OtherApp = () => <p>Hello</p>;
+    let OtherApp = () => <App />;
     let AnotherApp = () => <OtherApp />;
 
-    it('should exec the function that is the type of a node and treat its result as the real node', function () {
-        let appTree = constructVNode({ type: App, attributes: null, children: [] });
-        let otherAppTree = constructVNode({ type: OtherApp, attributes: null, children: [] });
-        let anotherAppTree = constructVNode({ type: AnotherApp, attributes: null, children: [] });
+    it('should exec all the components while there are some left', function () {
+        let appTree = constructVNode({ type: 'functionnal-component', component: App, attributes: null, children: [] });
+        let otherAppTree = constructVNode({ type: 'functionnal-component', component: OtherApp, attributes: null, children: [] });
+        let anotherAppTree = constructVNode({ type: 'functionnal-component', component: AnotherApp, attributes: null, children: [] });
 
         appTree.should.be.deep.equal(otherAppTree);
         appTree.should.be.deep.equal(anotherAppTree);
@@ -69,21 +77,23 @@ describe('constructVNode()', function () {
 
 describe('createElement()', function () {
     before(function (done) { // we create the globals needed as it should execute in browser env
+        this.timeout(20000);
         this.cleanupJsdomGlobals = globallyfyJsdom();
         done();
     });
     
     describe('when a string or number is supplied', function () {
         it('should create text node', function () {
-            let textValue = 'helloworld !';
-            let textValue2 = 2;
+            // we don't need to call constructVNode as the children are only text vnodes
+            let textValue = v('div', null, 'helloworld').children[0];
+            let textValue2 = v('div', null, 2).children[0];
             let textNode: Text = createElement(textValue);
             let textNode2: Text = createElement(textValue2);
     
             textNode.nodeType.should.be.equal(Node.TEXT_NODE);
-            textNode.nodeValue.should.be.equal(textValue);
+            textNode.nodeValue.should.be.equal('helloworld');
             textNode2.nodeType.should.be.equal(Node.TEXT_NODE);
-            textNode2.nodeValue.should.be.equal(textValue2+'');
+            textNode2.nodeValue.should.be.equal('2');
         });
     });
 
@@ -96,12 +106,12 @@ describe('createElement()', function () {
         });
 
         it('should create the children if the vdom node has some', function () {
-            let element: HTMLElement = createElement(
+            let element: HTMLElement = createElement(constructVNode(
                 <div>
                     <hr />
                     <br />
                 </div>
-            );
+            ));
 
             element.nodeType.should.be.equal(Node.ELEMENT_NODE);
             element.nodeName.toLowerCase().should.be.equal('div');
@@ -133,9 +143,9 @@ describe('createElement()', function () {
         it('should throw an error if children are added to void elements', function () {
             let thrown = true;
             try {
-                let element = createElement(
+                let element = createElement(constructVNode(
                     <hr><br /></hr>
-                );
+                ));
                 thrown = false;
             } catch (e) {}
 
@@ -169,11 +179,11 @@ describe('updateElement()', function () {
     });
 
     it('should remove a HTMLElement if there is no more', function () {
-        let container: HTMLElement = createElement(
+        let container: HTMLElement = createElement(constructVNode(
             <div>
                 <hr />
             </div>
-        );
+        ));
         let element = container.childNodes[0];
         let node = null;
         let oldNode = <hr />;
@@ -185,12 +195,12 @@ describe('updateElement()', function () {
     });
 
     it('should remove and create a HTMLElement if the old node and the new node are not of the same type', function () {
-        let container: HTMLElement = createElement(
+        let container: HTMLElement = createElement(constructVNode(
             <div>
                 <hr />
                 hello
             </div>
-        );
+        ));
         let element = container.childNodes[0];
         let element2 = container.childNodes[1];
 
@@ -212,11 +222,11 @@ describe('updateElement()', function () {
     });
 
     it('should update a HTMLElement\'s attributes if some attributes values have changed', function () {
-        let container: HTMLElement = createElement(
+        let container: HTMLElement = createElement(constructVNode(
             <div>
                 <a href="www.choualbox.com/"  class="red"  id="link" />
             </div>
-        );
+        ));
         let element = container.childNodes[0];
         let node = <a href="www.gbatemp.net/"  class="blue"  id="link" />;
         let oldNode = <a href="www.choualbox.com/"  class="red"  id="link" />;
@@ -249,21 +259,21 @@ describe('updateElement()', function () {
                       <input type="text" value="type something" />
                   </div>;
 
-        let container: HTMLElement = createElement(
+        let container: HTMLElement = createElement(constructVNode(
             <div>
                 <Hello hello="Hello to you !" />
                 <Hi toggle={true} />
             </div>
-        );
+        ));
 
         let element = container.childNodes[0];
         let element2 = container.childNodes[1];
 
-        let node = <Hello hello="Hello to all of you !" />;
-        let oldNode = <Hello hello="Hello to you !" />;
+        let node = constructVNode(<Hello hello="Hello to all of you !" />);
+        let oldNode = constructVNode(<Hello hello="Hello to you !" />);
 
-        let node2 = <Hi toggle={false} />;
-        let oldNode2 = <Hi toggle={true} />;
+        let node2 = constructVNode(<Hi toggle={false} />);
+        let oldNode2 = constructVNode(<Hi toggle={true} />);
 
         (container.childNodes[0] as HTMLElement).innerHTML.should.be.equal('Hello to you !');
         container.childNodes[1].childNodes[0].childNodes.length.should.be.equal(2);
@@ -384,5 +394,69 @@ describe('vdomFromServerSideRenderedElements()', function () {
         rehydratedVdom.should.be.deep.equal(vdom);
 
         cleanup();
+    });
+});
+
+describe('Context API', function () {
+    before(function (done) {
+        this.cleanupJsdomGlobals = globallyfyJsdom();
+        Fr4mework_app.__set__('context', Context.getInstance());
+        done();
+    });
+
+    beforeEach(function () {
+        Context.clearContext();
+    });
+
+    it('should pass the context to components lower in hierarchy', function () {
+        let Hello = ({ context }: any) => <p>{context.hi}</p>;
+        let HiContext = Context.createContextProvider('HiContext');
+        let node: any = constructVNode(
+            <HiContext hi="hello!">
+                <div>
+                    <Hello />
+                </div>
+            </HiContext>
+        );
+        let element: HTMLElement = createElement(node);
+
+        element            // HiContext div
+            .childNodes[0] // div
+            .childNodes[0] // p
+            .childNodes[0] // text
+                .nodeValue.should.be.equal('hello!');
+    });
+
+    it('should override context value and the previous value must be reset after', function () {
+        let Hello = ({ context }: any) => <p>{context.hi}</p>;
+        let HiContext = Context.createContextProvider('HiContext');
+        let node: any = constructVNode(
+            <HiContext hi="hello!">
+                <div>
+                    <HiContext hi="world!">
+                        <Hello />
+                    </HiContext>
+                    <Hello />
+                </div>
+            </HiContext>
+        );
+        let element: HTMLElement = createElement(node);
+
+        element            // HiContext div
+            .childNodes[0] // div
+            .childNodes[0] // HiContext div
+            .childNodes[0] // p
+            .childNodes[0] // text
+                .nodeValue.should.be.equal('world!');
+        element            // HiContext div
+            .childNodes[0] // div
+            .childNodes[1] // p
+            .childNodes[0] // text
+                .nodeValue.should.be.equal('hello!');
+    });
+
+    after(function (done) {
+        this.cleanupJsdomGlobals();
+        done();
     });
 });

@@ -1,22 +1,38 @@
 import { inBrowser } from 'fr4mework-util'
+import { Context } from './context'
 
-export interface VNodeDescriptor {
-    type: string | Function;
+export interface AbstractBaseVNode {
+    type: string;
+}
+
+export interface AbstractElementVNode extends AbstractBaseVNode {
     attributes: object;
-    children: VNode[];
-} 
+    children: AbstractBaseVNode[]
+}
+
+export interface FunctionnalVNode extends AbstractBaseVNode {
+    type: 'function';
+    fn: Function;
+}
+
+export interface TextVNode extends AbstractBaseVNode {
+    type: 'text';
+    value: string;
+}
+
+export interface HTMLElementVNode extends AbstractElementVNode {
+    type: 'html';
+    tag: string;
+}
+
+export interface FunctionnalComponentVNode extends AbstractElementVNode {
+    type: 'functionnal-component';
+    component: Function;
+}
 
 export interface AppConfig {
     containerElementId?: string;
-    globalStore?: object;
 }
-
-export interface ServerSideConfig {
-    location?: string;
-    globalStore?: object;
-}
-
-export type VNode = VNodeDescriptor | string | number;
 
 // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/flat
 function flatDeep(array: any[]) {
@@ -27,20 +43,67 @@ function flatDeep(array: any[]) {
     []);
 };
 
+function removeNullChildren(children: any[]): AbstractBaseVNode[] {
+    return children.filter(child => !!child);
+}
+
 /**
  * If the node is a component we construct it by calling his function
  * @param node 
  */
-function constructVNode(node: VNode): VNode {
-    return typeof node == 'string' || typeof node == 'number'
-            ? node
-            : typeof node.type == 'function'
-                ? constructVNode(node.type({
-                      attributes: node.attributes,
-                      children: node.children.filter(child => !!child),
-                      globalStore: globalStore
-                  }))
-                : node
+function constructVNode(node: AbstractBaseVNode): AbstractBaseVNode {
+    // console.log(node);
+    if (!node) return null;
+
+    if (node.type == 'text') {
+        return node;
+    } else if (node.type == 'function') {
+        throw 'Nodes that are functions are only permitted in components.';
+    } else if (node.type == 'html') {
+        let constructedHtmlVNode = <HTMLElementVNode>node;
+        constructedHtmlVNode.children = removeNullChildren(
+            constructedHtmlVNode.children.map(child => constructVNode(child))
+        );
+
+        return constructedHtmlVNode;
+    } else if (node.type == 'functionnal-component') {
+        let functionnalComponentVNode = <FunctionnalComponentVNode>node;
+        let functionnalComponent = functionnalComponentVNode.component;
+        let contextBackup = {}; // used to revert context after the component
+                                // has potentially modified it
+        for (let propName in context) {
+            contextBackup[propName] = context[propName];
+        }
+        let constructedFunctionnalComponentVNode = functionnalComponent({
+            attributes: functionnalComponentVNode.attributes,
+            children: functionnalComponentVNode.children,
+            context: context
+        });
+        let toReturn =  constructVNode(constructedFunctionnalComponentVNode);
+        for (let propName in contextBackup) {
+            context[propName] = contextBackup[propName];
+        }
+
+        return toReturn;
+    }
+
+    return null;
+}
+
+function transformLiteralNodes(node: string | Function): AbstractBaseVNode {
+    if (typeof node == 'string' || typeof node == 'number') {
+        return <TextVNode>{
+            type: 'text',
+            value: node.toString()
+        };
+    } else if (typeof node == 'function') {
+        return <FunctionnalVNode>{
+            type: 'function',
+            fn: node
+        };
+    }
+
+    return node;
 }
 
 /**
@@ -51,12 +114,26 @@ function constructVNode(node: VNode): VNode {
  * @param children Children of the node
  * @returns The constructed partial virtual node
  */
-export function v(type: string | Function, attributes: object, ...children: VNode[]): VNodeDescriptor {
-    return <VNodeDescriptor>constructVNode({
-        type: type,
-        attributes: attributes,
-        children: flatDeep(children)
-    });
+export function v(type: string | Function, attributes: object, ...children: any[]): AbstractBaseVNode {
+    children = flatDeep(children);
+
+    if (typeof type == 'string') {
+        return <HTMLElementVNode>{
+            type: 'html',
+            tag: type,
+            attributes: attributes,
+            children: children.map(child => transformLiteralNodes(child))
+        };
+    } else if (typeof type == 'function') {
+        return <FunctionnalComponentVNode>{
+            type: 'functionnal-component',
+            component: type,
+            attributes: attributes,
+            children: children.map(child => transformLiteralNodes(child))
+        };
+    }
+
+    return null;
 }
 
 let voidElements: string[] = [
@@ -85,19 +162,19 @@ let voidElements: string[] = [
     'wbr'
 ]
 
-let appNode: VNode;
-let oldAppNode: VNode;
+let appNode: AbstractBaseVNode;
+let oldAppNode: AbstractBaseVNode;
 let rootElement: HTMLElement;
 let appContainer: HTMLElement;
 let rendering: boolean;
-let globalStore: object;
+let context: Context;
 
 /**
  * Creates a new application
- * @param rootNode Root virtual node of the application (i.e: "<App />" or "Fr4mework.v(App, null)")
+ * @param rootNode Root virtual node of the application (i.e: "<App />" or "v(App, null)")
  * @param cconfig Configuration object of the app
  */
-export function app(rootNode: VNode, config?: AppConfig): void {
+export function app(rootNode: AbstractBaseVNode, config?: AppConfig): void {
     if (!inBrowser()) throw 'Cannot be used in a non browser-like environment !';
     init(rootNode, config);
 }
@@ -108,7 +185,7 @@ export function app(rootNode: VNode, config?: AppConfig): void {
  * @param rootNode Root virtual node of the app
  * @param config Configuration object of the app
  */
-function init(rootNode: VNode, config?: AppConfig): void {
+function init(rootNode: AbstractBaseVNode, config?: AppConfig): void {
     rendering = false;
     appContainer = (config && config.containerElementId 
             && document.getElementById(config.containerElementId))
@@ -117,7 +194,7 @@ function init(rootNode: VNode, config?: AppConfig): void {
     rootElement = <HTMLElement>appContainer.childNodes[0];
     oldAppNode = vdomFromServerSideRenderedElements(rootElement);
     appNode = rootNode;
-    globalStore = (config && config.globalStore) || {};
+    context = Context.getInstance();
 
     scheduleRender();
 }
@@ -136,6 +213,7 @@ export function scheduleRender(): void {
  * Creates a full virtual DOM and compare it with the old one, then it updates the real DOM
  */
 function render(): void {
+    Context.clearContext();
     let node = constructVNode(appNode);
     if (appContainer) {
         rootElement = updateElement(node, oldAppNode, rootElement, appContainer);
@@ -149,69 +227,78 @@ function render(): void {
  * The app's virtual DOM is outputed as html
  * @param rootNode Root virtual node of the app
  */
-export function serverSideRender(rootNode: VNode, config?: ServerSideConfig): string {
-    globalStore = (config && config.globalStore) || {};
-
-    // we init the location so routes will work
-    (<any>globalStore).__fr4mework = (<any>globalStore).__fr4mework || {};
-    (<any>globalStore).__fr4mework.location = (<any>globalStore).__fr4mework.location || '/';
-
-    function stringifyElement(node: VNode): string {
-        let fullNode = constructVNode(node);
-
-        if (typeof fullNode == 'string') return fullNode;
-        if (typeof fullNode == 'number') return fullNode+'';
-
-        let voidElement = isVoidElement(<string>fullNode.type);
-        if (voidElement && fullNode.children.length > 0) {
-            throw `<${fullNode.type} /> is a void element and thus cannot have children`;
+export function serverSideRender(rootNode: AbstractBaseVNode): string {
+    function stringifyElement(node: AbstractBaseVNode): string {
+        switch (node.type) {
+            case 'text':
+                return (<TextVNode>node).value;
+            
+            case 'function':
+            case 'functionnal-component':
+                throw 'constructVNode() should have been called on the partial vdom tree !';
         }
 
-        let element = '<' + fullNode.type;
-        for (let attributeName in fullNode.attributes) {
+        // node.type == 'html
+        let htmlNode = <HTMLElementVNode>node;
+        let isVoidEl = isVoidElement(htmlNode.tag);
+        if (isVoidEl && htmlNode.children.length > 0) {
+            throw `<${htmlNode.tag} /> is a void element and thus cannot have children`;
+        }
+
+        let element = '<' + htmlNode.tag;
+        for (let attributeName in htmlNode.attributes) {
             if (attributeName[0] != 'o' && attributeName[1] != 'n') {
-                element += ' ' + attributeName + '="' + fullNode.attributes[attributeName] + '"';
+                element += ' ' + attributeName + '="' + htmlNode.attributes[attributeName] + '"';
             }
         }
-        if (voidElement) element += ' /';
+        if (isVoidEl) element += ' /';
         element += '>';
 
-        if (!voidElement) {
-            for (let child of fullNode.children) {
+        if (!isVoidEl) {
+            for (let child of htmlNode.children) {
                 element += stringifyElement(child);
             }
-            element += '</' + fullNode.type + '>';
+            element += '</' + htmlNode.tag + '>';
         }
 
         return element;
     }
 
-    return stringifyElement(rootNode);
+    return stringifyElement(constructVNode(rootNode));
 }
 
 /**
  * Creates a virtual node from an existing element
  * @param rootElement 
  */
-function vdomFromServerSideRenderedElements(rootElement: HTMLElement): VNode {
-    function vdomifyElement(node: Node): VNode {
+function vdomFromServerSideRenderedElements(rootElement: HTMLElement): AbstractBaseVNode {
+    function vdomifyElement(node: Node): AbstractBaseVNode {
         if (!node) return null;
-        if (node.nodeType == Node.TEXT_NODE) return node.nodeValue;
+        if (node.nodeType == Node.TEXT_NODE) {
+            return <TextVNode>{
+                type: 'text',
+                value: node.nodeValue
+            };
+        }
         let element: HTMLElement = <HTMLElement>node;
         let forEach = Array.prototype.forEach;
         let map = Array.prototype.map;
 
-        return {
-            type: element.nodeName.toLowerCase(),
-            attributes: (function (attributesMap) {
-                if (attributesMap.length == 0) return null;
-                let attributes = {};
-                forEach.call(attributesMap,
-                    attributeNode => attributes[attributeNode.nodeName] = attributeNode.nodeValue);
-                return attributes;
-            })(element.attributes),
-            children: map.call(element.childNodes,
-                node => vdomifyElement(node))
+        function extractAttributes(attributesMap: NamedNodeMap): object {
+            if (attributesMap.length == 0) return null;
+
+            let attributes = {};
+            forEach.call(attributesMap, attributeNode =>
+                attributes[attributeNode.nodeName] = attributeNode.nodeValue);
+            
+            return attributes;
+        }
+
+        return <HTMLElementVNode>{
+            type: 'html',
+            tag: element.nodeName.toLowerCase(),
+            attributes: extractAttributes(element.attributes),
+            children: map.call(element.childNodes, node => vdomifyElement(node))
         };
     }
 
@@ -222,30 +309,35 @@ function isVoidElement(name: string): boolean {
     return voidElements.includes(name);
 }
 
-function createElement(node: VNode): HTMLElement {
-    if (typeof node == 'string') {
-        return <any>document.createTextNode(node);
-    } else if (typeof node == 'number') {
-        return <any>document.createTextNode(node+'');
-    } else {
-        let element = document.createElement(<string>node.type);
-        for (let attributeName in node.attributes) {
-            setAttribute(attributeName, node.attributes[attributeName], element);
-        }
-
-        if (isVoidElement(<string>node.type) && node.children.length > 0) {
-            throw `<${node.type} /> is a void element and thus cannot have children`;
-        }
-
-        for (let child of node.children) {
-            element.appendChild(createElement(child));
-        }
-
-        return element;
+function createElement(node: AbstractBaseVNode): HTMLElement {
+    switch (node.type) {
+        case 'text':
+            return <any>document.createTextNode((<TextVNode>node).value);
+        
+        case 'function':
+        case 'functionnal-component':
+            throw 'constructVNode() should have been called on the partial vdom tree !';
     }
+
+    // node.type == 'html'
+    let htmlNode = <HTMLElementVNode>node;
+    let element = document.createElement(htmlNode.tag);
+    for (let attributeName in htmlNode.attributes) {
+        setAttribute(attributeName, htmlNode.attributes[attributeName], element);
+    }
+
+    if (isVoidElement(htmlNode.tag) && htmlNode.children.length > 0) {
+        throw `<${htmlNode.tag} /> is a void element and thus cannot have children`;
+    }
+
+    for (let child of htmlNode.children) {
+        element.appendChild(createElement(child));
+    }
+
+    return element;
 }
 
-function updateElement(node: VNode, oldNode: VNode, element: HTMLElement, parentElement: HTMLElement): HTMLElement {
+function updateElement(node: AbstractBaseVNode, oldNode: AbstractBaseVNode, element: HTMLElement, parentElement: HTMLElement): HTMLElement {
     // the node is not available in the new virtual dom, it must be removed
     if (!node) {
         if (element && parentElement) {
@@ -263,15 +355,21 @@ function updateElement(node: VNode, oldNode: VNode, element: HTMLElement, parent
         return element;
     }
 
+    function nodesAreDifferent(node: AbstractBaseVNode, oldNode: AbstractBaseVNode): boolean {
+        return (
+            // node type mismatch (ex: 'html' != 'text')
+            node.type != oldNode.type
+            // the two nodes are text nodes but their value is different
+            || (node.type == 'text' && oldNode.type == 'text'
+                && (<TextVNode>node).value != (<TextVNode>oldNode).value)
+            // the two nodes are html nodes but different elements
+            || (node.type == 'html' && oldNode.type == 'html'
+                && (<HTMLElementVNode>node).tag != (<HTMLElementVNode>oldNode).tag)
+        );
+    }
+
     // type mismatch,one is a string, the other is a node
-    if (typeof node != typeof oldNode
-            // the two are strings or numbers but not with the same value
-            || ((typeof node == 'string' || typeof node == 'number')
-                    && (typeof oldNode == 'string' ||typeof oldNode == 'number')
-                && node != oldNode)
-            // node type mismatch
-            || (typeof node == 'object' && typeof oldNode == 'object'
-                && node.type != oldNode.type)) {
+    if (nodesAreDifferent(node, oldNode)) {
         let newElement = createElement(node);
         if (parentElement) {
             parentElement.replaceChild(newElement, element);
@@ -279,15 +377,17 @@ function updateElement(node: VNode, oldNode: VNode, element: HTMLElement, parent
         return newElement;
     }
 
-    if (typeof node == 'object' && typeof oldNode == 'object') {
+    if (node.type == 'html' && oldNode.type == 'html') {
+        let htmlNode = <HTMLElementVNode>node;
+
         // update attributes
-        for (let attributeName in node.attributes) {
-            updateAttribute(attributeName, node, oldNode, element);
+        for (let attributeName in htmlNode.attributes) {
+            updateAttribute(attributeName, htmlNode, <HTMLElementVNode>oldNode, element);
         }
 
         // update children
-        let nodeChildren = (<VNodeDescriptor>node).children;
-        let oldNodeChildren = (<VNodeDescriptor>oldNode).children;
+        let nodeChildren = htmlNode.children;
+        let oldNodeChildren = (<HTMLElementVNode>oldNode).children;
         let maxLength = Math.max(nodeChildren.length, oldNodeChildren.length);
 
         for (let i = 0; i < maxLength; i++) {
@@ -298,8 +398,8 @@ function updateElement(node: VNode, oldNode: VNode, element: HTMLElement, parent
     return element;
 }
 
-function updateAttribute(name: string, node: VNode, oldNode: VNode, element: HTMLElement): void {
-    if (element && typeof node == 'object' && typeof oldNode == 'object') {
+function updateAttribute(name: string, node: HTMLElementVNode, oldNode: HTMLElementVNode, element: HTMLElement): void {
+    if (element) {
         if (node.attributes[name] != oldNode.attributes[name]) {
             setAttribute(name, node.attributes[name], element);
         }
@@ -316,7 +416,7 @@ function setAttribute(name: string, value: any, element: HTMLElement): void {
 
 declare global {
     namespace JSX {
-        type Element = VNode;
+        type Element = AbstractBaseVNode;
         interface IntrinsicElement {
             [key: string]: any
         }

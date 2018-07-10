@@ -2,8 +2,8 @@
   "name": "fr4mework",
   "version": "1.0.1",
   "description": "Micro-framework for educationnal purpose",
-  "main": "./lib/app.js",
-  "types": "./lib/app.d.ts",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
   "keywords": [
     "framework",
     "javascript",
@@ -11,6 +11,10 @@
   ],
   "author": "422404",
   "license": "UNLICENCED",
+  "repository": {
+      "type": "git",
+      "url": "https://github.com/422404/Fr4mework"
+  },
   "scripts": {
     "build": "tsc",
     "test": "ts-mocha -p test/tsconfig.json test/*"

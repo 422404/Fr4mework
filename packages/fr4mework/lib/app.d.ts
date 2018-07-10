@@ -1,24 +1,36 @@
-export interface VNodeDescriptor {
-    type: string | Function;
+export interface AbstractBaseVNode {
+    type: string;
+}
+export interface AbstractElementVNode extends AbstractBaseVNode {
     attributes: object;
-    children: VNode[];
+    children: AbstractBaseVNode[];
+}
+export interface FunctionnalVNode extends AbstractBaseVNode {
+    type: 'function';
+    fn: Function;
+}
+export interface TextVNode extends AbstractBaseVNode {
+    type: 'text';
+    value: string;
+}
+export interface HTMLElementVNode extends AbstractElementVNode {
+    type: 'html';
+    tag: string;
+}
+export interface FunctionnalComponentVNode extends AbstractElementVNode {
+    type: 'functionnal-component';
+    component: Function;
 }
 export interface AppConfig {
     containerElementId?: string;
-    globalStore?: object;
 }
-export interface ServerSideConfig {
-    location?: string;
-    globalStore?: object;
-}
-export declare type VNode = VNodeDescriptor | string | number;
-export declare function v(type: string | Function, attributes: object, ...children: VNode[]): VNodeDescriptor;
-export declare function app(rootNode: VNode, config?: AppConfig): void;
+export declare function v(type: string | Function, attributes: object, ...children: any[]): AbstractBaseVNode;
+export declare function app(rootNode: AbstractBaseVNode, config?: AppConfig): void;
 export declare function scheduleRender(): void;
-export declare function serverSideRender(rootNode: VNode, config?: ServerSideConfig): string;
+export declare function serverSideRender(rootNode: AbstractBaseVNode): string;
 declare global {
     namespace JSX {
-        type Element = VNode;
+        type Element = AbstractBaseVNode;
         interface IntrinsicElement {
             [key: string]: any;
         }

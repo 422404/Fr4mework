@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var fr4mework_util_1 = require("fr4mework-util");
+var context_1 = require("./context");
 function flatDeep(array) {
     return array.reduce(function (acc, val) {
         return Array.isArray(val)
@@ -9,27 +10,81 @@ function flatDeep(array) {
     }, []);
 }
 ;
+function removeNullChildren(children) {
+    return children.filter(function (child) { return !!child; });
+}
 function constructVNode(node) {
-    return typeof node == 'string' || typeof node == 'number'
-        ? node
-        : typeof node.type == 'function'
-            ? constructVNode(node.type({
-                attributes: node.attributes,
-                children: node.children.filter(function (child) { return !!child; }),
-                globalStore: globalStore
-            }))
-            : node;
+    if (!node)
+        return null;
+    if (node.type == 'text') {
+        return node;
+    }
+    else if (node.type == 'function') {
+        throw 'Nodes that are functions are only permitted in components.';
+    }
+    else if (node.type == 'html') {
+        var constructedHtmlVNode = node;
+        constructedHtmlVNode.children = removeNullChildren(constructedHtmlVNode.children.map(function (child) { return constructVNode(child); }));
+        return constructedHtmlVNode;
+    }
+    else if (node.type == 'functionnal-component') {
+        var functionnalComponentVNode = node;
+        var functionnalComponent = functionnalComponentVNode.component;
+        var contextBackup = {};
+        for (var propName in context) {
+            contextBackup[propName] = context[propName];
+        }
+        var constructedFunctionnalComponentVNode = functionnalComponent({
+            attributes: functionnalComponentVNode.attributes,
+            children: functionnalComponentVNode.children,
+            context: context
+        });
+        var toReturn = constructVNode(constructedFunctionnalComponentVNode);
+        for (var propName in contextBackup) {
+            context[propName] = contextBackup[propName];
+        }
+        return toReturn;
+    }
+    return null;
+}
+function transformLiteralNodes(node) {
+    if (typeof node == 'string' || typeof node == 'number') {
+        return {
+            type: 'text',
+            value: node.toString()
+        };
+    }
+    else if (typeof node == 'function') {
+        return {
+            type: 'function',
+            fn: node
+        };
+    }
+    return node;
 }
 function v(type, attributes) {
     var children = [];
     for (var _i = 2; _i < arguments.length; _i++) {
         children[_i - 2] = arguments[_i];
     }
-    return constructVNode({
-        type: type,
-        attributes: attributes,
-        children: flatDeep(children)
-    });
+    children = flatDeep(children);
+    if (typeof type == 'string') {
+        return {
+            type: 'html',
+            tag: type,
+            attributes: attributes,
+            children: children.map(function (child) { return transformLiteralNodes(child); })
+        };
+    }
+    else if (typeof type == 'function') {
+        return {
+            type: 'functionnal-component',
+            component: type,
+            attributes: attributes,
+            children: children.map(function (child) { return transformLiteralNodes(child); })
+        };
+    }
+    return null;
 }
 exports.v = v;
 var voidElements = [
@@ -62,7 +117,7 @@ var oldAppNode;
 var rootElement;
 var appContainer;
 var rendering;
-var globalStore;
+var context;
 function app(rootNode, config) {
     if (!fr4mework_util_1.inBrowser())
         throw 'Cannot be used in a non browser-like environment !';
@@ -79,7 +134,7 @@ function init(rootNode, config) {
     rootElement = appContainer.childNodes[0];
     oldAppNode = vdomFromServerSideRenderedElements(rootElement);
     appNode = rootNode;
-    globalStore = (config && config.globalStore) || {};
+    context = context_1.Context.getInstance();
     scheduleRender();
 }
 function scheduleRender() {
@@ -90,6 +145,7 @@ function scheduleRender() {
 }
 exports.scheduleRender = scheduleRender;
 function render() {
+    context_1.Context.clearContext();
     var node = constructVNode(appNode);
     if (appContainer) {
         rootElement = updateElement(node, oldAppNode, rootElement, appContainer);
@@ -97,59 +153,67 @@ function render() {
     }
     rendering = false;
 }
-function serverSideRender(rootNode, config) {
-    globalStore = (config && config.globalStore) || {};
-    globalStore.__fr4mework = globalStore.__fr4mework || {};
-    globalStore.__fr4mework.location = globalStore.__fr4mework.location || '/';
+function serverSideRender(rootNode) {
     function stringifyElement(node) {
-        var fullNode = constructVNode(node);
-        if (typeof fullNode == 'string')
-            return fullNode;
-        if (typeof fullNode == 'number')
-            return fullNode + '';
-        var voidElement = isVoidElement(fullNode.type);
-        if (voidElement && fullNode.children.length > 0) {
-            throw "<" + fullNode.type + " /> is a void element and thus cannot have children";
+        switch (node.type) {
+            case 'text':
+                return node.value;
+            case 'function':
+            case 'functionnal-component':
+                throw 'constructVNode() should have been called on the partial vdom tree !';
         }
-        var element = '<' + fullNode.type;
-        for (var attributeName in fullNode.attributes) {
+        var htmlNode = node;
+        var isVoidEl = isVoidElement(htmlNode.tag);
+        if (isVoidEl && htmlNode.children.length > 0) {
+            throw "<" + htmlNode.tag + " /> is a void element and thus cannot have children";
+        }
+        var element = '<' + htmlNode.tag;
+        for (var attributeName in htmlNode.attributes) {
             if (attributeName[0] != 'o' && attributeName[1] != 'n') {
-                element += ' ' + attributeName + '="' + fullNode.attributes[attributeName] + '"';
+                element += ' ' + attributeName + '="' + htmlNode.attributes[attributeName] + '"';
             }
         }
-        if (voidElement)
+        if (isVoidEl)
             element += ' /';
         element += '>';
-        if (!voidElement) {
-            for (var _i = 0, _a = fullNode.children; _i < _a.length; _i++) {
+        if (!isVoidEl) {
+            for (var _i = 0, _a = htmlNode.children; _i < _a.length; _i++) {
                 var child = _a[_i];
                 element += stringifyElement(child);
             }
-            element += '</' + fullNode.type + '>';
+            element += '</' + htmlNode.tag + '>';
         }
         return element;
     }
-    return stringifyElement(rootNode);
+    return stringifyElement(constructVNode(rootNode));
 }
 exports.serverSideRender = serverSideRender;
 function vdomFromServerSideRenderedElements(rootElement) {
     function vdomifyElement(node) {
         if (!node)
             return null;
-        if (node.nodeType == Node.TEXT_NODE)
-            return node.nodeValue;
+        if (node.nodeType == Node.TEXT_NODE) {
+            return {
+                type: 'text',
+                value: node.nodeValue
+            };
+        }
         var element = node;
         var forEach = Array.prototype.forEach;
         var map = Array.prototype.map;
+        function extractAttributes(attributesMap) {
+            if (attributesMap.length == 0)
+                return null;
+            var attributes = {};
+            forEach.call(attributesMap, function (attributeNode) {
+                return attributes[attributeNode.nodeName] = attributeNode.nodeValue;
+            });
+            return attributes;
+        }
         return {
-            type: element.nodeName.toLowerCase(),
-            attributes: (function (attributesMap) {
-                if (attributesMap.length == 0)
-                    return null;
-                var attributes = {};
-                forEach.call(attributesMap, function (attributeNode) { return attributes[attributeNode.nodeName] = attributeNode.nodeValue; });
-                return attributes;
-            })(element.attributes),
+            type: 'html',
+            tag: element.nodeName.toLowerCase(),
+            attributes: extractAttributes(element.attributes),
             children: map.call(element.childNodes, function (node) { return vdomifyElement(node); })
         };
     }
@@ -159,26 +223,26 @@ function isVoidElement(name) {
     return voidElements.includes(name);
 }
 function createElement(node) {
-    if (typeof node == 'string') {
-        return document.createTextNode(node);
+    switch (node.type) {
+        case 'text':
+            return document.createTextNode(node.value);
+        case 'function':
+        case 'functionnal-component':
+            throw 'constructVNode() should have been called on the partial vdom tree !';
     }
-    else if (typeof node == 'number') {
-        return document.createTextNode(node + '');
+    var htmlNode = node;
+    var element = document.createElement(htmlNode.tag);
+    for (var attributeName in htmlNode.attributes) {
+        setAttribute(attributeName, htmlNode.attributes[attributeName], element);
     }
-    else {
-        var element = document.createElement(node.type);
-        for (var attributeName in node.attributes) {
-            setAttribute(attributeName, node.attributes[attributeName], element);
-        }
-        if (isVoidElement(node.type) && node.children.length > 0) {
-            throw "<" + node.type + " /> is a void element and thus cannot have children";
-        }
-        for (var _i = 0, _a = node.children; _i < _a.length; _i++) {
-            var child = _a[_i];
-            element.appendChild(createElement(child));
-        }
-        return element;
+    if (isVoidElement(htmlNode.tag) && htmlNode.children.length > 0) {
+        throw "<" + htmlNode.tag + " /> is a void element and thus cannot have children";
     }
+    for (var _i = 0, _a = htmlNode.children; _i < _a.length; _i++) {
+        var child = _a[_i];
+        element.appendChild(createElement(child));
+    }
+    return element;
 }
 function updateElement(node, oldNode, element, parentElement) {
     if (!node) {
@@ -194,23 +258,26 @@ function updateElement(node, oldNode, element, parentElement) {
         }
         return element;
     }
-    if (typeof node != typeof oldNode
-        || ((typeof node == 'string' || typeof node == 'number')
-            && (typeof oldNode == 'string' || typeof oldNode == 'number')
-            && node != oldNode)
-        || (typeof node == 'object' && typeof oldNode == 'object'
-            && node.type != oldNode.type)) {
+    function nodesAreDifferent(node, oldNode) {
+        return (node.type != oldNode.type
+            || (node.type == 'text' && oldNode.type == 'text'
+                && node.value != oldNode.value)
+            || (node.type == 'html' && oldNode.type == 'html'
+                && node.tag != oldNode.tag));
+    }
+    if (nodesAreDifferent(node, oldNode)) {
         var newElement = createElement(node);
         if (parentElement) {
             parentElement.replaceChild(newElement, element);
         }
         return newElement;
     }
-    if (typeof node == 'object' && typeof oldNode == 'object') {
-        for (var attributeName in node.attributes) {
-            updateAttribute(attributeName, node, oldNode, element);
+    if (node.type == 'html' && oldNode.type == 'html') {
+        var htmlNode = node;
+        for (var attributeName in htmlNode.attributes) {
+            updateAttribute(attributeName, htmlNode, oldNode, element);
         }
-        var nodeChildren = node.children;
+        var nodeChildren = htmlNode.children;
         var oldNodeChildren = oldNode.children;
         var maxLength = Math.max(nodeChildren.length, oldNodeChildren.length);
         for (var i = 0; i < maxLength; i++) {
@@ -220,7 +287,7 @@ function updateElement(node, oldNode, element, parentElement) {
     return element;
 }
 function updateAttribute(name, node, oldNode, element) {
-    if (element && typeof node == 'object' && typeof oldNode == 'object') {
+    if (element) {
         if (node.attributes[name] != oldNode.attributes[name]) {
             setAttribute(name, node.attributes[name], element);
         }

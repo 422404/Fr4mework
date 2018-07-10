@@ -2,39 +2,19 @@ Order of priority:
 
 - /!\ Unit testing /!\
 
-- implement Router, Route, Link
-    <Router>
-        ...
-        <Route location="/hello">
-            <h2>Hello !</h2>
-            ...
-            <Link href="/goodbye">Go to goodbye</Link>
-            ...
-        </Route>
-        ...
-    </Router>
+- test Router, Route, Link
 
-- implement createContext()
-    let ThemeContext = createContext(/* optionnal first value */);
-    ...
-    <ThemeContext value="hello">
-        ...
-        <Hello />
-        ...
-    </ThemeContext>
-    ...
-    let Hello = ({ context }) => <p>{context.hello}</p>;
+- implement @Singleton, @StrictSingleton and singletonify()
 
 - add state management
-    * 2 types of stores : global store and local stores
-    * global state primarily used by the fr4mework itself
-    * actions are declared inside stores
-    * like MobX
-        @observable --> @triggerRender
+    <MobX>
+        * values are updated by actions and can lead to rerender (@triggerRender)
+        * actions are declared inside stores (@actions)
+        * computed values are computed whenever a value of the store changes (@computed)
+    </MobX>
 
 - readme files
 - implement dependency injection (like Angular 1.x)
-- implement singletonify
 
 ( - maybe get rid of typescripts for the tests ... )
 

@@ -15,6 +15,10 @@
   ],
   "author": "422404",
   "license": "UNLICENCED",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/422404/Fr4mework"
+  },
   "devDependencies": {
     "@types/chai": "^4.1.4",
     "@types/mocha": "^5.2.3",
