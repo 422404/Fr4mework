@@ -1,14 +1,18 @@
-import { AbstractBaseVNode, v } from 'fr4mework'
+import { AbstractBaseVNode, v, onlyOneChild } from 'fr4mework'
+import { errorNoRouter } from './util'
 
+// todo: handle params on the route
 let Route = ({ attributes, context, children }: any): AbstractBaseVNode => {
+    if (!context) errorNoRouter();
+
     if (attributes.route && match(attributes.route, context.location)) {
-        if (attributes.view && children.length == 0) {
+        if (attributes.view) {
             let View = attributes.view;
 
             return <View />;
         }
 
-        return <div data-route="">{children}</div>;
+        return onlyOneChild(children);
     }
 
     return null;

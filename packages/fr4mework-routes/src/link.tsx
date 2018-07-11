@@ -1,7 +1,7 @@
 import { AbstractBaseVNode, v } from 'fr4mework'
 
 let Link = ({ attributes, children }: any) => (
-    <a {...attributes} data-link="" onclick={(e) => handleLinkClick(attributes.href, e)}>
+    <a {...attributes} onclick={(e) => handleLinkClick(attributes.href, e)}>
         {children}
     </a>
 );

@@ -1,4 +1,4 @@
-import { scheduleRender, v, AbstractBaseVNode, Context } from 'fr4mework'
+import { scheduleRender, v, AbstractBaseVNode, Context, onlyOneChild } from 'fr4mework'
 import { inBrowser, chain } from 'fr4mework-util'
 
 let once = false;
@@ -6,20 +6,18 @@ let LocationContext = Context.createContextProvider('LocationContext') as any;
 
 let Router = ({ children, attributes }: any) => {
     if (!once && inBrowser()) {
-        installHandlers();
+        installEventHandlerAndHooks();
     }
 
     return (
-        <div data-router="">
-            <LocationContext location={attributes.location || location.pathname}>
-                {children}
-            </LocationContext>
-        </div>
+        <LocationContext location={(attributes && attributes.location) || location.pathname}>
+            {onlyOneChild(children)}
+        </LocationContext>
     );
 };
 export default Router
 
-let installHandlers = () => {
+let installEventHandlerAndHooks = () => {
     window.onpopstate = scheduleRender;
     history.pushState = chain(
         { fn: history.pushState, scope: history, args: 'arguments' },

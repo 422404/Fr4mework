@@ -13,6 +13,9 @@ function flatDeep(array) {
 function removeNullChildren(children) {
     return children.filter(function (child) { return !!child; });
 }
+function constructVDOM(root) {
+    return constructVNode(root);
+}
 function constructVNode(node) {
     if (!node)
         return null;
@@ -30,20 +33,28 @@ function constructVNode(node) {
     else if (node.type == 'functionnal-component') {
         var functionnalComponentVNode = node;
         var functionnalComponent = functionnalComponentVNode.component;
-        var contextBackup = {};
-        for (var propName in context) {
-            contextBackup[propName] = context[propName];
-        }
-        var constructedFunctionnalComponentVNode = functionnalComponent({
+        var constructedComponentVNode = functionnalComponent({
             attributes: functionnalComponentVNode.attributes,
             children: functionnalComponentVNode.children,
             context: context
         });
-        var toReturn = constructVNode(constructedFunctionnalComponentVNode);
-        for (var propName in contextBackup) {
-            context[propName] = contextBackup[propName];
+        return constructVNode(constructedComponentVNode);
+    }
+    else if (node.type == 'context-provider') {
+        var contextProviderVNode = node;
+        var contextBackup = {};
+        for (var propName in contextProviderVNode.attributes) {
+            contextBackup[propName] = context.get(propName);
         }
-        return toReturn;
+        var child = contextProviderVNode.providerFn({
+            attributes: contextProviderVNode.attributes,
+            children: contextProviderVNode.children
+        });
+        var constructedChild = constructVNode(child);
+        for (var propName in contextBackup) {
+            context.set(propName, contextBackup[propName]);
+        }
+        return constructedChild;
     }
     return null;
 }
@@ -72,6 +83,14 @@ function v(type, attributes) {
         return {
             type: 'html',
             tag: type,
+            attributes: attributes,
+            children: children.map(function (child) { return transformLiteralNodes(child); })
+        };
+    }
+    else if (typeof type == 'function' && type.$$isContext) {
+        return {
+            type: 'context-provider',
+            providerFn: type,
             attributes: attributes,
             children: children.map(function (child) { return transformLiteralNodes(child); })
         };
@@ -145,8 +164,8 @@ function scheduleRender() {
 }
 exports.scheduleRender = scheduleRender;
 function render() {
-    context_1.Context.clearContext();
-    var node = constructVNode(appNode);
+    context.clearContext();
+    var node = constructVDOM(appNode);
     if (appContainer) {
         rootElement = updateElement(node, oldAppNode, rootElement, appContainer);
         oldAppNode = node;
@@ -154,7 +173,10 @@ function render() {
     rendering = false;
 }
 function serverSideRender(rootNode) {
+    context = context_1.Context.getInstance();
     function stringifyElement(node) {
+        if (!node)
+            return '';
         switch (node.type) {
             case 'text':
                 return node.value;
@@ -185,7 +207,7 @@ function serverSideRender(rootNode) {
         }
         return element;
     }
-    return stringifyElement(constructVNode(rootNode));
+    return stringifyElement(constructVDOM(rootNode));
 }
 exports.serverSideRender = serverSideRender;
 function vdomFromServerSideRenderedElements(rootElement) {

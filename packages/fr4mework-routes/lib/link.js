@@ -11,7 +11,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 var fr4mework_1 = require("fr4mework");
 var Link = function (_a) {
     var attributes = _a.attributes, children = _a.children;
-    return (fr4mework_1.v("a", __assign({}, attributes, { "data-link": "", onclick: function (e) { return handleLinkClick(attributes.href, e); } }), children));
+    return (fr4mework_1.v("a", __assign({}, attributes, { onclick: function (e) { return handleLinkClick(attributes.href, e); } }), children));
 };
 exports.default = Link;
 var handleLinkClick = function (newLocation, clickEvent) {

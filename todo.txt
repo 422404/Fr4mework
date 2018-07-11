@@ -2,7 +2,9 @@ Order of priority:
 
 - /!\ Unit testing /!\
 
-- test Router, Route, Link
+- test Link
+
+- add <Switch>
 
 - implement @Singleton, @StrictSingleton and singletonify()
 

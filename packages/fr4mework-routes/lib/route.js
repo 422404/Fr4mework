@@ -1,14 +1,17 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var fr4mework_1 = require("fr4mework");
+var util_1 = require("./util");
 var Route = function (_a) {
     var attributes = _a.attributes, context = _a.context, children = _a.children;
+    if (!context)
+        util_1.errorNoRouter();
     if (attributes.route && match(attributes.route, context.location)) {
-        if (attributes.view && children.length == 0) {
+        if (attributes.view) {
             var View = attributes.view;
             return fr4mework_1.v(View, null);
         }
-        return fr4mework_1.v("div", { "data-route": "" }, children);
+        return fr4mework_1.onlyOneChild(children);
     }
     return null;
 };

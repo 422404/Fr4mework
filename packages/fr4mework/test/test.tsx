@@ -405,7 +405,7 @@ describe('Context API', function () {
     });
 
     beforeEach(function () {
-        Context.clearContext();
+        Context.getInstance().clearContext();
     });
 
     it('should pass the context to components lower in hierarchy', function () {
@@ -420,8 +420,7 @@ describe('Context API', function () {
         );
         let element: HTMLElement = createElement(node);
 
-        element            // HiContext div
-            .childNodes[0] // div
+        element            // div
             .childNodes[0] // p
             .childNodes[0] // text
                 .nodeValue.should.be.equal('hello!');
@@ -442,14 +441,11 @@ describe('Context API', function () {
         );
         let element: HTMLElement = createElement(node);
 
-        element            // HiContext div
-            .childNodes[0] // div
-            .childNodes[0] // HiContext div
+        element            // div
             .childNodes[0] // p
             .childNodes[0] // text
                 .nodeValue.should.be.equal('world!');
-        element            // HiContext div
-            .childNodes[0] // div
+        element            // div
             .childNodes[1] // p
             .childNodes[0] // text
                 .nodeValue.should.be.equal('hello!');

@@ -21,6 +21,10 @@ export interface FunctionnalComponentVNode extends AbstractElementVNode {
     type: 'functionnal-component';
     component: Function;
 }
+export interface ContextProviderVNode extends AbstractElementVNode {
+    type: 'context-provider';
+    providerFn: Function;
+}
 export interface AppConfig {
     containerElementId?: string;
 }

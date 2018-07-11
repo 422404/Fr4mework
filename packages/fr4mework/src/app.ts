@@ -30,6 +30,11 @@ export interface FunctionnalComponentVNode extends AbstractElementVNode {
     component: Function;
 }
 
+export interface ContextProviderVNode extends AbstractElementVNode {
+    type: 'context-provider';
+    providerFn: Function;
+}
+
 export interface AppConfig {
     containerElementId?: string;
 }
@@ -47,12 +52,15 @@ function removeNullChildren(children: any[]): AbstractBaseVNode[] {
     return children.filter(child => !!child);
 }
 
+function constructVDOM(root: AbstractBaseVNode): AbstractBaseVNode {
+    return constructVNode(root);
+}
+
 /**
  * If the node is a component we construct it by calling his function
  * @param node 
  */
 function constructVNode(node: AbstractBaseVNode): AbstractBaseVNode {
-    // console.log(node);
     if (!node) return null;
 
     if (node.type == 'text') {
@@ -69,22 +77,31 @@ function constructVNode(node: AbstractBaseVNode): AbstractBaseVNode {
     } else if (node.type == 'functionnal-component') {
         let functionnalComponentVNode = <FunctionnalComponentVNode>node;
         let functionnalComponent = functionnalComponentVNode.component;
-        let contextBackup = {}; // used to revert context after the component
-                                // has potentially modified it
-        for (let propName in context) {
-            contextBackup[propName] = context[propName];
-        }
-        let constructedFunctionnalComponentVNode = functionnalComponent({
+        
+        let constructedComponentVNode = functionnalComponent({
             attributes: functionnalComponentVNode.attributes,
             children: functionnalComponentVNode.children,
             context: context
         });
-        let toReturn =  constructVNode(constructedFunctionnalComponentVNode);
+
+        return constructVNode(constructedComponentVNode);
+    } else if (node.type == 'context-provider') {
+        let contextProviderVNode = <ContextProviderVNode>node;
+        let contextBackup = {}; // used to revert context after the component
+                                // has potentially modified it
+        for (let propName in contextProviderVNode.attributes) {
+            contextBackup[propName] = context.get(propName);
+        }
+        let child = contextProviderVNode.providerFn({
+                attributes: contextProviderVNode.attributes,
+                children: contextProviderVNode.children
+        });
+        let constructedChild = constructVNode(child);
         for (let propName in contextBackup) {
-            context[propName] = contextBackup[propName];
+            context.set(propName, contextBackup[propName]);
         }
 
-        return toReturn;
+        return constructedChild;
     }
 
     return null;
@@ -117,10 +134,18 @@ function transformLiteralNodes(node: string | Function): AbstractBaseVNode {
 export function v(type: string | Function, attributes: object, ...children: any[]): AbstractBaseVNode {
     children = flatDeep(children);
 
+    // todo: refactor ... hell that's ugly as f***
     if (typeof type == 'string') {
         return <HTMLElementVNode>{
             type: 'html',
             tag: type,
+            attributes: attributes,
+            children: children.map(child => transformLiteralNodes(child))
+        };
+    } else if (typeof type == 'function' && (<any>type).$$isContext) {
+        return <ContextProviderVNode>{
+            type: 'context-provider',
+            providerFn: type,
             attributes: attributes,
             children: children.map(child => transformLiteralNodes(child))
         };
@@ -213,8 +238,8 @@ export function scheduleRender(): void {
  * Creates a full virtual DOM and compare it with the old one, then it updates the real DOM
  */
 function render(): void {
-    Context.clearContext();
-    let node = constructVNode(appNode);
+    context.clearContext();
+    let node = constructVDOM(appNode);
     if (appContainer) {
         rootElement = updateElement(node, oldAppNode, rootElement, appContainer);
         oldAppNode = node;
@@ -228,7 +253,11 @@ function render(): void {
  * @param rootNode Root virtual node of the app
  */
 export function serverSideRender(rootNode: AbstractBaseVNode): string {
+    context = Context.getInstance();
+    
     function stringifyElement(node: AbstractBaseVNode): string {
+        if (!node) return '';
+        
         switch (node.type) {
             case 'text':
                 return (<TextVNode>node).value;
@@ -264,7 +293,7 @@ export function serverSideRender(rootNode: AbstractBaseVNode): string {
         return element;
     }
 
-    return stringifyElement(constructVNode(rootNode));
+    return stringifyElement(constructVDOM(rootNode));
 }
 
 /**

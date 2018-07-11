@@ -2,6 +2,8 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 var context_1 = require("./context");
 exports.Context = context_1.Context;
+var children_1 = require("./children");
+exports.onlyOneChild = children_1.onlyOneChild;
 var app_1 = require("./app");
 exports.app = app_1.app;
 exports.v = app_1.v;
